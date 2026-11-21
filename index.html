@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1E3A5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>چک‌لیست اشتراکی کافه</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --navy: #1E3A5F; --navy2: #2E5A8C; --gold: #F5D76E;
+    --bg: #EDF2F7; --card: #fff; --text: #1A2A3A; --muted: #5B7C99;
+    --line: #D0E0EC; --ok: #2E7D32; --warn: #EF6C00; --empty: #C62828;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  .setup-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px; background: linear-gradient(160deg, #0B2450, #1E3A5F 50%, #2E5A8C);
+  }
+  .setup-card {
+    background: #fff; border-radius: 16px; padding: 24px; max-width: 440px; width: 100%;
+    box-shadow: 0 8px 40px rgba(0,0,0,.25);
+  }
+  .setup-card h1 { font-size: 1.2rem; color: var(--navy); margin-bottom: 6px; }
+  .setup-card p { font-size: .85rem; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+  .setup-card ol { font-size: .82rem; color: var(--text); padding-right: 18px; margin-bottom: 14px; line-height: 1.7; }
+  .setup-card textarea {
+    width: 100%; min-height: 120px; border: 1.5px solid var(--line); border-radius: 10px;
+    padding: 10px; font-size: .78rem; font-family: monospace; direction: ltr; text-align: left;
+    margin-bottom: 10px; resize: vertical;
+  }
+  .setup-card button {
+    width: 100%; border: none; border-radius: 10px; padding: 12px;
+    background: var(--navy); color: #fff; font-weight: 700; font-size: .95rem; cursor: pointer;
+  }
+  .setup-card .hint { font-size: .75rem; color: var(--muted); margin-top: 10px; }
+  .setup-card a { color: var(--navy2); }
+
+  .app-header {
+    background: linear-gradient(135deg, var(--navy), var(--navy2));
+    color: #fff; padding: calc(12px + var(--safe-top)) 14px 12px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.18);
+  }
+  .app-header h1 { font-size: 1.1rem; }
+  .app-header .sub { font-size: .72rem; opacity: .85; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; display: inline-block; }
+  .dot.online { background: #4CAF50; box-shadow: 0 0 6px #4CAF50; }
+  .dot.offline { background: #f44336; }
+  .meta-row { display: flex; gap: 8px; margin-top: 10px; }
+  .meta-row input {
+    flex: 1; border: none; border-radius: 8px; padding: 9px 11px;
+    font-size: .85rem; background: rgba(255,255,255,.95); color: var(--text);
+  }
+  .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 10px; }
+  .stat { background: rgba(255,255,255,.12); border-radius: 8px; padding: 6px 4px; text-align: center; font-size: .68rem; }
+  .stat b { display: block; font-size: .95rem; margin-top: 1px; }
+
+  main { padding: 12px 12px calc(80px + var(--safe-bottom)); max-width: 640px; margin: 0 auto; }
+  .search-wrap { margin-bottom: 10px; }
+  .search-wrap input {
+    width: 100%; padding: 11px 14px; border: 1.5px solid var(--line);
+    border-radius: 10px; font-size: .95rem; background: #fff;
+  }
+  .filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; }
+  .chip {
+    flex-shrink: 0; padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--line);
+    background: #fff; font-size: .8rem; color: var(--muted); cursor: pointer;
+  }
+  .chip.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+
+  .section {
+    background: var(--card); border-radius: 12px; border: 1px solid var(--line);
+    margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  .section-head {
+    color: #fff; padding: 11px 14px; font-weight: 700; font-size: .9rem;
+    display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+  }
+  .section-head .badge {
+    background: rgba(255,255,255,.22); border-radius: 12px; padding: 2px 9px; font-size: .72rem;
+  }
+  .section.collapsed .section-body { display: none; }
+  .item { padding: 10px 12px; border-bottom: 1px solid #EEF3F8; }
+  .item:last-child { border-bottom: none; }
+  .item-name { font-weight: 600; font-size: .9rem; margin-bottom: 7px; }
+  .item-fields { display: grid; grid-template-columns: 1.2fr .8fr 1fr; gap: 6px; }
+  .item select, .item input {
+    width: 100%; padding: 8px; border: 1.2px solid var(--line);
+    border-radius: 8px; font-size: .82rem; background: #fff; min-height: 38px;
+  }
+
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+    border-top: 1px solid var(--line); padding: 8px 12px calc(8px + var(--safe-bottom));
+    display: flex; gap: 8px; z-index: 100; box-shadow: 0 -2px 12px rgba(0,0,0,.08);
+    max-width: 640px; margin: 0 auto;
+  }
+  .bottom-bar button {
+    flex: 1; border: none; border-radius: 10px; padding: 11px 8px;
+    font-size: .78rem; font-weight: 700; cursor: pointer;
+  }
+  .btn-primary { background: var(--navy); color: #fff; }
+  .btn-secondary { background: #E8EEF5; color: var(--navy); }
+  .btn-gold { background: var(--gold); color: var(--navy); }
+
+  .toast {
+    position: fixed; bottom: calc(70px + var(--safe-bottom)); left: 50%;
+    transform: translateX(-50%); background: var(--navy); color: #fff;
+    padding: 10px 20px; border-radius: 10px; font-size: .9rem;
+    opacity: 0; transition: .25s; z-index: 200; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  .last-sync { font-size: .7rem; opacity: .75; }
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<div id="setupScreen" class="setup-screen">
+  <div class="setup-card">
+    <h1>راه‌اندازی چک‌لیست اشتراکی</h1>
+    <p>یک‌بار Firebase رایگان بسازید تا تغییرات برای همه نمایش داده شود.</p>
+    <ol>
+      <li>برو به <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
+      <li>پروژه جدید بساز (مثلاً cafe-checklist)</li>
+      <li>از منو: <b>Build → Realtime Database → Create Database</b></li>
+      <li>حالت را موقتاً <b>Test mode</b> بگذار (قوانین باز برای شروع)</li>
+      <li>برو به ⚙️ Project settings → Your apps → Web (&lt;/&gt;)</li>
+      <li>یک اپ وب ثبت کن و بخش <b>firebaseConfig</b> را کپی کن</li>
+      <li>اینجا بچسبان و ذخیره را بزن</li>
+    </ol>
+    <textarea id="configInput" placeholder='{\n  apiKey: "...",\n  authDomain: "...",\n  databaseURL: "...",\n  projectId: "...",\n  ...\n}'></textarea>
+    <button onclick="saveConfig()">اتصال و شروع</button>
+    <p class="hint">databaseURL باید وجود داشته باشد (Realtime Database). بعد از راه‌اندازی، همین لینک را به بقیه بدهید.</p>
+    <p class="hint"><a href="#" onclick="useDemo();return false;">یا ادامه با حالت فقط‌محلی (بدون اشتراک)</a></p>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appRoot" class="hidden">
+  <header class="app-header">
+    <h1>چک‌لیست اشتراکی کافه</h1>
+    <div class="sub">
+      <span class="dot" id="connDot"></span>
+      <span id="connLabel">در حال اتصال...</span>
+      <span class="last-sync" id="lastSync"></span>
+    </div>
+    <div class="meta-row">
+      <input type="date" id="dateField">
+      <input type="text" id="personField" placeholder="نام شما (مسئول)">
+    </div>
+    <div class="stats">
+      <div class="stat">کل<br><b id="statTotal">0</b></div>
+      <div class="stat">موجود<br><b id="statOk">0</b></div>
+      <div class="stat">سفارش<br><b id="statOrder">0</b></div>
+      <div class="stat">تمام<br><b id="statOut">0</b></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="search-wrap">
+      <input type="search" id="search" placeholder="جستجوی کالا..." oninput="render()">
+    </div>
+    <div class="filters">
+      <button class="chip active" data-f="all" onclick="setFilter('all')">همه</button>
+      <button class="chip" data-f="order" onclick="setFilter('order')">نیاز به سفارش</button>
+      <button class="chip" data-f="out" onclick="setFilter('out')">تمام‌شده</button>
+      <button class="chip" data-f="empty" onclick="setFilter('empty')">پرنشده</button>
+    </div>
+    <div id="list"></div>
+  </main>
+
+  <div class="bottom-bar">
+    <button class="btn-gold" onclick="pushMeta()">همگام‌سازی</button>
+    <button class="btn-secondary" onclick="exportCSV()">خروجی</button>
+    <button class="btn-secondary" onclick="window.print()">چاپ</button>
+    <button class="btn-primary" onclick="resetAll()">پاک‌کردن</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = [
+  { cat: "قهوه‌ها", color: "#1E3A5F", items: ["دانه قهوه اسپرسو","دانه قهوه فیلتر / دریپ","پودر قهوه فوری","کپسول اسپرسو","کاکائو / هات‌چاکلت","پودر ماچا"]},
+  { cat: "دمنوش‌ها و چای‌ها", color: "#00695C", items: ["چای سیاه","چای سبز","چای ماسالا","دمنوش به‌لیمو","دمنوش آویشن و عسل","گل‌گاوزبان و بهارنارنج","سایر دمنوش گیاهی"]},
+  { cat: "لبنیات و جایگزین‌ها", color: "#C49000", items: ["شیر پرچرب / کم‌چرب","شیر بادام","شیر جو دوسر","شیر سویا","خامه قنادی","ماست یونانی"]},
+  { cat: "سیروپ‌ها", color: "#6A1B9A", items: ["وانیل","کارامل","فندق","شکلات / موکا","نارگیل","بادام","توت‌فرنگی","بلوبری","تمشک","هلو","انبه","پشن‌فروت","سیب‌دارچین","زنجبیل","نعناع","اسپرسو / قهوه","آیریش کریم","بدون‌قند وانیل","بدون‌قند کارامل","سس شکلات","سس کارامل","سس پسته"]},
+  { cat: "میوه‌ها", color: "#2E7D32", items: ["موز","توت‌فرنگی","بلوبری","انبه","سیب","پرتقال / لیمو","کیوی","آووکادو"]},
+  { cat: "آبمیوه‌های پاکتی", color: "#EF6C00", items: ["پرتقال","سیب","آلبالو","انار","هلو","انبه","میکس چندمیوه","انگور"]},
+  { cat: "آب گازدار و سودا", color: "#0277BD", items: ["آب گازدار ساده","سودا","تونیک","لیموناد گازدار","آب‌معدنی ساده","قوطی نوشابه"]},
+  { cat: "محصولات کاغذی بهداشتی", color: "#5D4037", items: ["دستمال کوکتیل","دستمال نرمال","دستکش","لیوان یک‌بارمصرف","در لیوان / نی","قاشق و چنگال یکبار","دستمال توالت","سفره / رومیزی"]},
+  { cat: "مواد شوینده", color: "#455A64", items: ["مایع ظرفشویی","اسپری سطوح","ضدعفونی‌کننده","پاک‌کننده شیشه","اسکاچ / ابر","کیسه زباله"]},
+  { cat: "مواد غذایی", color: "#BF360C", items: ["شکر / شکر قهوه‌ای","عسل","یخ","آجیل و خشکبار","مواد اولیه ذرت مکزیکی","سس‌ها و مرباها"]},
+  { cat: "شیرینی و کیک", color: "#AD1457", items: ["کیک شکلاتی / دبل","تیرامیسو","چیزکیک","جار کیک","کوکی / براونی","وافل"]},
+  { cat: "بستنی‌ها", color: "#00838F", items: ["وانیل","شکلات","پسته","توت‌فرنگی","فندق","سایر طعم‌ها"]},
+  { cat: "سایر اقلام مصرفی", color: "#37474F", items: ["همزن / چوب‌بستنی","فویل و سلفون","کاغذ پرینتر","نوار صندوق","مداد و خودکار","سایر"]},
+];
+
+const CONFIG_KEY = "cafe_fb_config_v1";
+let db = null, shared = false, state = {}, filter = "all", collapsed = {};
+let applyingRemote = false;
+
+function itemKey(cat, name) { return cat + "||" + name; }
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+function parseConfig(text) {
+  // Accept full firebaseConfig object pasted in various formats
+  let t = text.trim();
+  if (!t) throw new Error("خالی است");
+  // If user pasted with const firebaseConfig = {...}
+  const m = t.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("فرمت config پیدا نشد");
+  t = m[0];
+  // Quote unquoted keys
+  t = t.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+  // Remove trailing commas
+  t = t.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
+  const obj = JSON.parse(t);
+  if (!obj.apiKey || !obj.projectId) throw new Error("apiKey یا projectId نیست");
+  if (!obj.databaseURL) {
+    // try construct
+    obj.databaseURL = "https://" + obj.projectId + "-default-rtdb.firebaseio.com";
+  }
+  return obj;
+}
+
+function saveConfig() {
+  try {
+    const cfg = parseConfig(document.getElementById("configInput").value);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+    startApp(cfg);
+  } catch (e) {
+    alert("خطا در خواندن تنظیمات: " + e.message + "\n\nمطمئن شوید کل firebaseConfig را کپی کرده‌اید و Realtime Database ساخته شده است.");
+  }
+}
+
+function useDemo() {
+  shared = false;
+  localStorage.removeItem(CONFIG_KEY);
+  document.getElementById("setupScreen").classList.add("hidden");
+  document.getElementById("appRoot").classList.remove("hidden");
+  document.getElementById("connDot").className = "dot offline";
+  document.getElementById("connLabel").textContent = "حالت فقط‌محلی (بدون اشتراک)";
+  loadLocal();
+  render();
+}
+
+function startApp(cfg) {
+  try {
+    firebase.initializeApp(cfg);
+    db = firebase.database();
+    shared = true;
+    document.getElementById("setupScreen").classList.add("hidden");
+    document.getElementById("appRoot").classList.remove("hidden");
+    document.getElementById("connDot").className = "dot online";
+    document.getElementById("connLabel").textContent = "متصل — همگام با همه";
+    listenRemote();
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  } catch (e) {
+    alert("اتصال برقرار نشد: " + e.message);
+  }
+}
+
+function listenRemote() {
+  db.ref("checklist").on("value", snap => {
+    applyingRemote = true;
+    const val = snap.val() || {};
+    state = val.items || {};
+    if (val.meta) {
+      if (val.meta.date) dateField.value = val.meta.date;
+      if (val.meta.person) personField.value = val.meta.person;
+      if (val.meta.updatedAt) {
+        lastSync.textContent = "· آخرین تغییر: " + new Date(val.meta.updatedAt).toLocaleString("fa-IR");
+      }
+    }
+    render();
+    applyingRemote = false;
+  }, err => {
+    document.getElementById("connDot").className = "dot offline";
+    document.getElementById("connLabel").textContent = "خطا در اتصال";
+    console.error(err);
+  });
+
+  db.ref(".info/connected").on("value", s => {
+    const ok = s.val() === true;
+    document.getElementById("connDot").className = "dot " + (ok ? "online" : "offline");
+    document.getElementById("connLabel").textContent = ok ? "متصل — همگام با همه" : "قطع — تلاش مجدد...";
+  });
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem("cafe_checklist_local_v1");
+    if (raw) state = JSON.parse(raw);
+  } catch(e) { state = {}; }
+  if (!dateField.value) dateField.value = new Date().toISOString().slice(0,10);
+}
+
+function getItem(cat, name) {
+  return state[itemKey(cat, name)] || { status: "", qty: "", price: "" };
+}
+
+function setItem(cat, name, field, value) {
+  if (applyingRemote) return;
+  const k = itemKey(cat, name);
+  if (!state[k]) state[k] = { status: "", qty: "", price: "" };
+  state[k][field] = value;
+  if (shared && db) {
+    db.ref("checklist/items/" + encodeURIComponent(k).replace(/\./g, "%2E")).set(state[k]);
+    db.ref("checklist/meta").update({
+      updatedAt: Date.now(),
+      person: personField.value || "",
+      date: dateField.value || ""
+    });
+  } else {
+    localStorage.setItem("cafe_checklist_local_v1", JSON.stringify(state));
+  }
+  updateStats();
+}
+
+function pushMeta() {
+  if (shared && db) {
+    db.ref("checklist/meta").update({
+      updatedAt: Date.now(),
+      person: personField.value || "",
+      date: dateField.value || ""
+    });
+    toast("همگام شد ✓");
+  } else {
+    localStorage.setItem("cafe_checklist_local_v1", JSON.stringify(state));
+    toast("محلی ذخیره شد");
+  }
+}
+
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.f === f));
+  render();
+}
+
+function updateStats() {
+  let total=0, ok=0, order=0, out=0;
+  DATA.forEach(s => s.items.forEach(n => {
+    total++;
+    const st = getItem(s.cat, n).status;
+    if (st==="ok") ok++; else if (st==="order") order++; else if (st==="out") out++;
+  }));
+  statTotal.textContent = total;
+  statOk.textContent = ok;
+  statOrder.textContent = order;
+  statOut.textContent = out;
+}
+
+function render() {
+  const q = (search.value || "").trim();
+  const root = document.getElementById("list");
+  root.innerHTML = "";
+  DATA.forEach(sec => {
+    const items = sec.items.filter(name => {
+      if (q && !name.includes(q) && !sec.cat.includes(q)) return false;
+      const st = getItem(sec.cat, name).status;
+      if (filter==="order" && st!=="order") return false;
+      if (filter==="out" && st!=="out") return false;
+      if (filter==="empty" && st) return false;
+      return true;
+    });
+    if (!items.length) return;
+    const secEl = document.createElement("div");
+    secEl.className = "section" + (collapsed[sec.cat] ? " collapsed" : "");
+    secEl.innerHTML = `<div class="section-head" style="background:${sec.color}" onclick="toggleSec('${sec.cat}')">
+      <span>${sec.cat}</span><span class="badge">${items.length}</span></div>
+      <div class="section-body"></div>`;
+    const body = secEl.querySelector(".section-body");
+    items.forEach(name => {
+      const d = getItem(sec.cat, name);
+      const row = document.createElement("div");
+      row.className = "item";
+      row.innerHTML = `<div class="item-name">${name}</div>
+        <div class="item-fields">
+          <select data-cat="${sec.cat}" data-name="${name}" data-field="status">
+            <option value="">وضعیت</option>
+            <option value="ok" ${d.status==="ok"?"selected":""}>✓ موجود</option>
+            <option value="order" ${d.status==="order"?"selected":""}>سفارش</option>
+            <option value="out" ${d.status==="out"?"selected":""}>تمام</option>
+          </select>
+          <input type="number" min="0" inputmode="numeric" placeholder="تعداد" value="${d.qty||""}" data-cat="${sec.cat}" data-name="${name}" data-field="qty">
+          <input type="number" min="0" inputmode="numeric" placeholder="قیمت" value="${d.price||""}" data-cat="${sec.cat}" data-name="${name}" data-field="price">
+        </div>`;
+      body.appendChild(row);
+    });
+    root.appendChild(secEl);
+  });
+  root.querySelectorAll("select, input").forEach(el => {
+    el.addEventListener("change", () => setItem(el.dataset.cat, el.dataset.name, el.dataset.field, el.value));
+    el.addEventListener("input", () => { if (el.tagName==="INPUT") setItem(el.dataset.cat, el.dataset.name, el.dataset.field, el.value); });
+  });
+  updateStats();
+}
+
+function toggleSec(cat) { collapsed[cat] = !collapsed[cat]; render(); }
+
+function resetAll() {
+  if (!confirm("همه داده‌های چک‌لیست برای همه پاک شود؟")) return;
+  state = {};
+  if (shared && db) {
+    db.ref("checklist/items").set(null);
+    db.ref("checklist/meta").update({ updatedAt: Date.now(), person: personField.value, date: dateField.value });
+  } else {
+    localStorage.removeItem("cafe_checklist_local_v1");
+  }
+  render();
+  toast("پاک شد");
+}
+
+function exportCSV() {
+  const rows = [["دسته","نام کالا","وضعیت","موجودی","قیمت"]];
+  const map = { ok:"موجود", order:"نیاز به سفارش", out:"تمام شده", "":"" };
+  DATA.forEach(s => s.items.forEach(n => {
+    const d = getItem(s.cat, n);
+    rows.push([s.cat, n, map[d.status]||"", d.qty||"", d.price||""]);
+  }));
+  const bom = "\uFEFF";
+  const csv = bom + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  a.download = "checklist_" + (dateField.value||"export") + ".csv";
+  a.click();
+  toast("CSV آماده شد");
+}
+
+// Boot
+(function init() {
+  const saved = localStorage.getItem(CONFIG_KEY);
+  if (saved) {
+    try {
+      startApp(JSON.parse(saved));
+      return;
+    } catch(e) {}
+  }
+  // show setup
+})();
+
+dateField && dateField.addEventListener("change", pushMeta);
+personField && personField.addEventListener("change", pushMeta);
+</script>
+</body>
+</html>
